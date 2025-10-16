@@ -39,10 +39,12 @@ Future<void> _handleCreate(List<String> args) async {
 }
 
 /// --- PROJECT CREATION ---
+///
 Future<void> _createFlutterProject(String name) async {
   final org = 'com.xdev';
   print('🚀 Creating Flutter project "$name"...');
 
+  // Create the Flutter project
   final result = await Process.run('flutter', [
     'create',
     name,
@@ -57,6 +59,7 @@ Future<void> _createFlutterProject(String name) async {
 
   final lib = p.join(name, 'lib');
 
+  // Create folder structure
   final folders = [
     'views',
     'models',
@@ -73,47 +76,50 @@ Future<void> _createFlutterProject(String name) async {
     Directory(p.join(lib, folder)).createSync(recursive: true);
   }
 
-  /// --- Update pubspec ---
-  /// --- Update pubspec ---
+  // Create assets folders
+  Directory(p.join(name, 'assets/images')).createSync(recursive: true);
+  Directory(p.join(name, 'assets/icons')).createSync(recursive: true);
+
+  // --- Correct pubspec.yaml ---
   final pubspecFile = File(p.join(name, 'pubspec.yaml'));
-  var pubspecContent = pubspecFile.readAsStringSync();
+  pubspecFile.writeAsStringSync('''
+name: $name
+description: "A new Flutter project."
+publish_to: 'none'
 
-  // Latest stable versions as of now
-  const providerVersion = '^6.1.7';
-  const flutterScreenUtilVersion = '^5.12.0';
-  const googleFontsVersion = '^6.1.1';
-  const cupertinoIconsVersion = '^1.0.8';
+version: 1.0.0+1
 
-  // Replace dependencies section
-  pubspecContent = pubspecContent.replaceFirst('dependencies:\n', '''
+environment:
+  sdk: ^3.9.2
+
 dependencies:
   flutter:
     sdk: flutter
-  provider: $providerVersion
-  flutter_screenutil: $flutterScreenUtilVersion
-  google_fonts: $googleFontsVersion
-  cupertino_icons: $cupertinoIconsVersion
-''');
+  provider: ^6.1.5+1
+  flutter_screenutil: ^5.9.3
+  google_fonts: ^6.3.2
+  cupertino_icons: ^1.0.8
 
-  // Replace flutter section for assets
-  pubspecContent = pubspecContent.replaceFirst('flutter:\n', '''
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
 flutter:
   uses-material-design: true
+
   assets:
     - assets/images/
     - assets/icons/
 ''');
 
-  pubspecFile.writeAsStringSync(pubspecContent);
-
-  /// --- main.dart ---
+  // --- main.dart ---
   _write(lib, 'main.dart', '''
-import 'package:afaq/routes/route_name.dart';
-import 'package:afaq/routes/routing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
-
+import 'routes/route_name.dart';
+import 'routes/routing.dart';
 import 'providers/splash_provider.dart';
 
 void main() {
@@ -134,7 +140,7 @@ class MyApp extends StatelessWidget {
       designSize: const Size(375, 812),
       minTextAdapt: true,
       builder: (context, child) => MaterialApp(
-        title: 'afaq',
+        title: '$name',
         debugShowCheckedModeBanner: false,
         initialRoute: RouteName.splash,
         onGenerateRoute: Routing.generateRoute,
@@ -142,10 +148,9 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-
 ''');
 
-  /// --- ROUTES ---
+  // --- ROUTES ---
   _write(lib, 'routes/route_name.dart', '''
 class RouteName {
   static const String splash = '/';
@@ -174,7 +179,7 @@ class Routing {
 }
 ''');
 
-  /// --- SPLASH VIEW ---
+  // --- SPLASH VIEW ---
   Directory(p.join(lib, 'views', 'splash_view')).createSync(recursive: true);
   _write(lib, 'views/splash_view/splash_screen.dart', '''
 import 'package:flutter/material.dart';
@@ -200,7 +205,7 @@ class SplashScreen extends StatelessWidget {
 }
 ''');
 
-  /// --- PROVIDER ---
+  // --- PROVIDER ---
   _write(lib, 'providers/splash_provider.dart', '''
 import 'package:flutter/foundation.dart';
 
@@ -209,7 +214,7 @@ class SplashProvider extends ChangeNotifier {
 }
 ''');
 
-  /// --- CONSTANTS ---
+  // --- CONSTANTS ---
   _write(lib, 'core/constants/app_colors.dart', '''
 import 'package:flutter/material.dart';
 
@@ -223,7 +228,7 @@ class AppColors {
 }
 ''');
 
-  /// --- EXTENSIONS ---
+  // --- EXTENSIONS ---
   _write(lib, 'core/extensions/size_extensions.dart', '''
 import 'package:flutter/widgets.dart';
 
@@ -236,24 +241,77 @@ extension SizedBoxExt on num {
   print('');
   print('✅ Project "$name" created successfully!');
   print('📦 Installing dependencies...');
+
+  // Clean & get
   await Process.run(
     'flutter',
     ['clean'],
     workingDirectory: name,
     runInShell: true,
   );
-
-  // Run flutter pub get
   await Process.run(
     'flutter',
     ['pub', 'get'],
     workingDirectory: name,
     runInShell: true,
   );
+
+  // Force upgrade all dependencies to latest versions
+  await Process.run(
+    'flutter',
+    ['pub', 'upgrade', '--major-versions'],
+    workingDirectory: name,
+    runInShell: true,
+  );
+
   print('');
   print('🎉 Done! Run:');
   print('   cd $name');
   print('   flutter run');
+  Process.runSync('code', ['--version'], runInShell: true);
+}
+
+// ---- open project  ----
+Future<void> openProject(String projectPath) async {
+  if (isVSCodeInstalled()) {
+    await Process.run(
+      'code',
+      ['.'],
+      workingDirectory: projectPath,
+      runInShell: true,
+    );
+  } else if (isAndroidStudioInstalled()) {
+    await Process.run('open', [
+      '-a',
+      'Android Studio',
+      projectPath,
+    ], runInShell: true);
+  } else {
+    print('⚠️ No supported IDE found. Open the project manually.');
+  }
+}
+
+// ----- check if VSCode is installed ----
+bool isVSCodeInstalled() {
+  try {
+    final result = Process.runSync('code', ['--version'], runInShell: true);
+    return result.exitCode == 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+// ----- check if Android Studio is installed ----
+bool isAndroidStudioInstalled() {
+  try {
+    final result = Process.runSync('open', [
+      '-Ra',
+      'Android Studio',
+    ], runInShell: true);
+    return result.exitCode == 0;
+  } catch (_) {
+    return false;
+  }
 }
 
 /// --- CREATE VIEW ---
