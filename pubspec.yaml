@@ -1,5 +1,6 @@
 name: xdev_cli
-description: A powerful Flutter project generator CLI that helps developers quickly scaffold Flutter apps with clean architecture and folder structure.repository: https://github.com/xdevsoft0/xdev_cli
+description: A powerful Flutter project generator CLI that helps developers quickly scaffold Flutter apps with clean architecture and folder structure.
+repository: https://github.com/xdevsoft0/xdev_cli
 homepage: https://pub.dev/packages/xdev_cli
 version: 1.0.1
 
