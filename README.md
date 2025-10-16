@@ -1,2 +1,9 @@
-A sample command-line application with an entrypoint in `bin/`, library code
-in `lib/`, and example unit test in `test/`.
+# XDev CLI 🚀
+
+A developer-friendly command-line tool to generate Flutter boilerplate:
+- Create new Flutter projects with Provider setup.
+- Generate new views, routes, and services automatically.
+
+## Installation
+```bash
+dart pub global activate xdev_cli
