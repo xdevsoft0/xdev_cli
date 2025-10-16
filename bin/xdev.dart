@@ -74,20 +74,37 @@ Future<void> _createFlutterProject(String name) async {
   }
 
   /// --- Update pubspec ---
+  /// --- Update pubspec ---
   final pubspecFile = File(p.join(name, 'pubspec.yaml'));
   var pubspecContent = pubspecFile.readAsStringSync();
-  pubspecContent = pubspecContent.replaceFirst(
-    'dependencies:\n',
-    'dependencies:\n  provider: ^6.1.2\n  flutter_screenutil: ^5.9.0\n  google_fonts: ^6.1.0\n',
-  );
-  pubspecContent = pubspecContent.replaceFirst(
-    'flutter:\n',
-    'flutter:\n  assets:\n    - assets/images/\n    - assets/icons/\n\n',
-  );
-  pubspecFile.writeAsStringSync(pubspecContent);
 
-  Directory(p.join(name, 'assets', 'images')).createSync(recursive: true);
-  Directory(p.join(name, 'assets', 'icons')).createSync(recursive: true);
+  // Latest stable versions as of now
+  const providerVersion = '^6.1.7';
+  const flutterScreenUtilVersion = '^5.12.0';
+  const googleFontsVersion = '^6.1.1';
+  const cupertinoIconsVersion = '^1.0.8';
+
+  // Replace dependencies section
+  pubspecContent = pubspecContent.replaceFirst('dependencies:\n', '''
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: $providerVersion
+  flutter_screenutil: $flutterScreenUtilVersion
+  google_fonts: $googleFontsVersion
+  cupertino_icons: $cupertinoIconsVersion
+''');
+
+  // Replace flutter section for assets
+  pubspecContent = pubspecContent.replaceFirst('flutter:\n', '''
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/
+''');
+
+  pubspecFile.writeAsStringSync(pubspecContent);
 
   /// --- main.dart ---
   _write(lib, 'main.dart', '''
