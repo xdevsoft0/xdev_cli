@@ -39,7 +39,6 @@ Future<void> _handleCreate(List<String> args) async {
 }
 
 /// --- PROJECT CREATION ---
-///
 Future<void> _createFlutterProject(String name) async {
   final org = 'com.xdev';
   print('🚀 Creating Flutter project "$name"...');
@@ -90,14 +89,136 @@ Future<void> _createFlutterProject(String name) async {
   Directory(p.join(name, 'assets', 'images')).createSync(recursive: true);
   Directory(p.join(name, 'assets', 'icons')).createSync(recursive: true);
 
-  /// --- Create main.dart and other files ---
-  // (Your existing code for main.dart, routes, views, providers, etc.)
+  /// --- main.dart ---
+  _write(lib, 'main.dart', '''
+import 'package:afaq/routes/route_name.dart';
+import 'package:afaq/routes/routing.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:provider/provider.dart';
+
+import 'providers/splash_provider.dart';
+
+void main() {
+  runApp(
+    MultiProvider(
+      providers: [ChangeNotifierProvider(create: (_) => SplashProvider())],
+      child: const MyApp(),
+    ),
+  );
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ScreenUtilInit(
+      designSize: const Size(375, 812),
+      minTextAdapt: true,
+      builder: (context, child) => MaterialApp(
+        title: 'afaq',
+        debugShowCheckedModeBanner: false,
+        initialRoute: RouteName.splash,
+        onGenerateRoute: Routing.generateRoute,
+      ),
+    );
+  }
+}
+
+''');
+
+  /// --- ROUTES ---
+  _write(lib, 'routes/route_name.dart', '''
+class RouteName {
+  static const String splash = '/';
+  // Add more routes here
+}
+''');
+
+  _write(lib, 'routes/routing.dart', '''
+import 'package:flutter/material.dart';
+import '../views/splash_view/splash_screen.dart';
+import 'route_name.dart';
+
+class Routing {
+  static Route<dynamic> generateRoute(RouteSettings settings) {
+    switch (settings.name) {
+      case RouteName.splash:
+        return MaterialPageRoute(builder: (_) => const SplashScreen());
+      default:
+        return MaterialPageRoute(
+          builder: (_) => Scaffold(
+            body: Center(child: Text('No route found for \${settings.name}')),
+          ),
+        );
+    }
+  }
+}
+''');
+
+  /// --- SPLASH VIEW ---
+  Directory(p.join(lib, 'views', 'splash_view')).createSync(recursive: true);
+  _write(lib, 'views/splash_view/splash_screen.dart', '''
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../providers/splash_provider.dart';
+
+class SplashScreen extends StatelessWidget {
+  const SplashScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<SplashProvider>();
+
+    return Scaffold(
+      body: Center(
+        child: Text(
+          '🚀 Welcome to $name',
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
+      ),
+    );
+  }
+}
+''');
+
+  /// --- PROVIDER ---
+  _write(lib, 'providers/splash_provider.dart', '''
+import 'package:flutter/foundation.dart';
+
+class SplashProvider extends ChangeNotifier {
+  String message = 'Hello from SplashProvider';
+}
+''');
+
+  /// --- CONSTANTS ---
+  _write(lib, 'core/constants/app_colors.dart', '''
+import 'package:flutter/material.dart';
+
+class AppColors {
+  static const primary = Color(0xFF0066FF);
+  static const success = Color(0xFF00C853);
+  static const error = Color(0xFFD32F2F);
+  static const background = Color(0xFFF5F5F5);
+  static const textPrimary = Color(0xFF1A1A1A);
+  static const textSecondary = Color(0xFF757575);
+}
+''');
+
+  /// --- EXTENSIONS ---
+  _write(lib, 'core/extensions/size_extensions.dart', '''
+import 'package:flutter/widgets.dart';
+
+extension SizedBoxExt on num {
+  SizedBox get h => SizedBox(height: toDouble());
+  SizedBox get w => SizedBox(width: toDouble());
+}
+''');
 
   print('');
   print('✅ Project "$name" created successfully!');
-
-  /// --- RUN flutter clean ---
-  print('⚡ Running flutter clean...');
+  print('📦 Installing dependencies...');
   await Process.run(
     'flutter',
     ['clean'],
@@ -105,17 +226,15 @@ Future<void> _createFlutterProject(String name) async {
     runInShell: true,
   );
 
-  /// --- RUN flutter pub get ---
-  print('📦 Running flutter pub get...');
+  // Run flutter pub get
   await Process.run(
     'flutter',
     ['pub', 'get'],
     workingDirectory: name,
     runInShell: true,
   );
-
   print('');
-  print('🎉 Done! Your project is ready to run:');
+  print('🎉 Done! Run:');
   print('   cd $name');
   print('   flutter run');
 }
@@ -133,6 +252,7 @@ Future<void> _createView(String name) async {
   final viewDir = p.join(libDir.path, 'views', viewFolderName);
   Directory(viewDir).createSync(recursive: true);
 
+  // Create view file
   _write(viewDir, '${name}_screen.dart', '''
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -152,6 +272,7 @@ class ${className}Screen extends StatelessWidget {
 }
 ''');
 
+  // Create provider
   _write(viewDir, '${name}_provider.dart', '''
 import 'package:flutter/foundation.dart';
 
@@ -160,7 +281,47 @@ class ${className}Provider extends ChangeNotifier {
 }
 ''');
 
-  print('✅ View "$name" created successfully!');
+  // --- Automatically add to route_name.dart ---
+  final routeNameFile = File(p.join(libDir.path, 'routes', 'route_name.dart'));
+  if (routeNameFile.existsSync()) {
+    final content = routeNameFile.readAsStringSync();
+    final newRoute = "  static const String $name = '/$name';\n";
+    if (!content.contains(newRoute)) {
+      final updatedContent = content.replaceFirst(
+        '// Add more routes here',
+        '// Add more routes here\n$newRoute',
+      );
+      routeNameFile.writeAsStringSync(updatedContent);
+    }
+  }
+
+  // --- Automatically add to routing.dart ---
+  final routingFile = File(p.join(libDir.path, 'routes', 'routing.dart'));
+  if (routingFile.existsSync()) {
+    var content = routingFile.readAsStringSync();
+
+    // 1. Import the new screen
+    final importLine = "import '../views/$viewFolderName/${name}_screen.dart';";
+    if (!content.contains(importLine)) {
+      content = content.replaceFirst(
+        "import 'route_name.dart';",
+        "import 'route_name.dart';\n$importLine",
+      );
+    }
+
+    // 2. Add case to generateRoute
+    final caseLine =
+        '''
+      case RouteName.$name:
+        return MaterialPageRoute(builder: (_) => ${className}Screen());
+''';
+    if (!content.contains("RouteName.$name")) {
+      content = content.replaceFirst('default:', '$caseLine\n    default:');
+      routingFile.writeAsStringSync(content);
+    }
+  }
+
+  print('✅ View "$name" created and added to routing!');
 }
 
 /// --- CREATE SERVICE ---
