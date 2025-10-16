@@ -1,0 +1,303 @@
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
+
+void main(List<String> args) async {
+  if (args.isEmpty) {
+    print('Usage: xdev <command> [arguments]');
+    exit(0);
+  }
+
+  final command = args[0];
+  switch (command) {
+    case 'create':
+      await _handleCreate(args.skip(1).toList());
+      break;
+    default:
+      print('Unknown command: $command');
+  }
+}
+
+Future<void> _handleCreate(List<String> args) async {
+  if (args.isEmpty) {
+    print('Usage: xdev create [project|view|service] <name>');
+    return;
+  }
+
+  final type = args[0];
+  final name = args.length > 1 ? args[1] : null;
+
+  if (type == 'project' && name != null) {
+    await _createFlutterProject(name);
+  } else if (type == 'view' && name != null) {
+    await _createView(name);
+  } else if (type == 'service' && name != null) {
+    await _createService(name);
+  } else {
+    print('❌ Invalid usage.');
+  }
+}
+
+/// --- PROJECT CREATION ---
+Future<void> _createFlutterProject(String name) async {
+  final org = 'com.xdev';
+  print('🚀 Creating Flutter project "$name"...');
+
+  final result = await Process.run('flutter', [
+    'create',
+    name,
+    '--org',
+    org,
+  ], runInShell: true);
+
+  if (result.exitCode != 0) {
+    print(result.stderr);
+    return;
+  }
+
+  final lib = p.join(name, 'lib');
+
+  final folders = [
+    'views',
+    'models',
+    'providers',
+    'routes',
+    'core/services',
+    'core/constants',
+    'core/extensions',
+    'core/utils',
+    'core/widgets',
+  ];
+
+  for (final folder in folders) {
+    Directory(p.join(lib, folder)).createSync(recursive: true);
+  }
+
+  /// --- Update pubspec ---
+  final pubspecFile = File(p.join(name, 'pubspec.yaml'));
+  var pubspecContent = pubspecFile.readAsStringSync();
+  pubspecContent = pubspecContent.replaceFirst(
+    'dependencies:\n',
+    'dependencies:\n  provider: ^6.1.2\n  flutter_screenutil: ^5.9.0\n  google_fonts: ^6.1.0\n',
+  );
+  pubspecContent = pubspecContent.replaceFirst(
+    'flutter:\n',
+    'flutter:\n  assets:\n    - assets/images/\n    - assets/icons/\n\n',
+  );
+  pubspecFile.writeAsStringSync(pubspecContent);
+
+  Directory(p.join(name, 'assets', 'images')).createSync(recursive: true);
+  Directory(p.join(name, 'assets', 'icons')).createSync(recursive: true);
+
+  /// --- main.dart ---
+  _write(lib, 'main.dart', '''
+import 'package:afaq/routes/route_name.dart';
+import 'package:afaq/routes/routing.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:provider/provider.dart';
+
+import 'providers/splash_provider.dart';
+
+void main() {
+  runApp(
+    MultiProvider(
+      providers: [ChangeNotifierProvider(create: (_) => SplashProvider())],
+      child: const MyApp(),
+    ),
+  );
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ScreenUtilInit(
+      designSize: const Size(375, 812),
+      minTextAdapt: true,
+      builder: (context, child) => MaterialApp(
+        title: 'afaq',
+        debugShowCheckedModeBanner: false,
+        initialRoute: RouteName.splash,
+        onGenerateRoute: Routing.generateRoute,
+      ),
+    );
+  }
+}
+
+''');
+
+  /// --- ROUTES ---
+  _write(lib, 'routes/route_name.dart', '''
+class RouteName {
+  static const String splash = '/';
+  // Add more routes here
+}
+''');
+
+  _write(lib, 'routes/routing.dart', '''
+import 'package:flutter/material.dart';
+import '../views/splash_view/splash_screen.dart';
+import 'route_name.dart';
+
+class Routing {
+  static Route<dynamic> generateRoute(RouteSettings settings) {
+    switch (settings.name) {
+      case RouteName.splash:
+        return MaterialPageRoute(builder: (_) => const SplashScreen());
+      default:
+        return MaterialPageRoute(
+          builder: (_) => Scaffold(
+            body: Center(child: Text('No route found for \${settings.name}')),
+          ),
+        );
+    }
+  }
+}
+''');
+
+  /// --- SPLASH VIEW ---
+  Directory(p.join(lib, 'views', 'splash_view')).createSync(recursive: true);
+  _write(lib, 'views/splash_view/splash_screen.dart', '''
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../providers/splash_provider.dart';
+
+class SplashScreen extends StatelessWidget {
+  const SplashScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<SplashProvider>();
+
+    return Scaffold(
+      body: Center(
+        child: Text(
+          '🚀 Welcome to $name',
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
+      ),
+    );
+  }
+}
+''');
+
+  /// --- PROVIDER ---
+  _write(lib, 'providers/splash_provider.dart', '''
+import 'package:flutter/foundation.dart';
+
+class SplashProvider extends ChangeNotifier {
+  String message = 'Hello from SplashProvider';
+}
+''');
+
+  /// --- CONSTANTS ---
+  _write(lib, 'core/constants/app_colors.dart', '''
+import 'package:flutter/material.dart';
+
+class AppColors {
+  static const primary = Color(0xFF0066FF);
+  static const success = Color(0xFF00C853);
+  static const error = Color(0xFFD32F2F);
+  static const background = Color(0xFFF5F5F5);
+  static const textPrimary = Color(0xFF1A1A1A);
+  static const textSecondary = Color(0xFF757575);
+}
+''');
+
+  /// --- EXTENSIONS ---
+  _write(lib, 'core/extensions/size_extensions.dart', '''
+import 'package:flutter/widgets.dart';
+
+extension SizedBoxExt on num {
+  SizedBox get h => SizedBox(height: toDouble());
+  SizedBox get w => SizedBox(width: toDouble());
+}
+''');
+
+  print('');
+  print('✅ Project "$name" created successfully!');
+  print('📦 Installing dependencies...');
+  await Process.run('flutter', ['pub', 'get'], workingDirectory: name);
+  print('');
+  print('🎉 Done! Run:');
+  print('   cd $name');
+  print('   flutter run');
+}
+
+/// --- CREATE VIEW ---
+Future<void> _createView(String name) async {
+  final libDir = Directory('lib');
+  if (!libDir.existsSync()) {
+    print('❌ Run inside a Flutter project root.');
+    exit(1);
+  }
+
+  final className = _capitalize(name);
+  final viewFolderName = '${name}_view';
+  final viewDir = p.join(libDir.path, 'views', viewFolderName);
+  Directory(viewDir).createSync(recursive: true);
+
+  _write(viewDir, '${name}_screen.dart', '''
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../providers/${name}_provider.dart';
+
+class ${className}Screen extends StatelessWidget {
+  const ${className}Screen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<${className}Provider>();
+    return Scaffold(
+      appBar: AppBar(title: const Text('$className')),
+      body: Center(child: Text(provider.message)),
+    );
+  }
+}
+''');
+
+  _write(viewDir, '${name}_provider.dart', '''
+import 'package:flutter/foundation.dart';
+
+class ${className}Provider extends ChangeNotifier {
+  String message = '$className Screen Ready';
+}
+''');
+
+  print('✅ View "$name" created successfully!');
+}
+
+/// --- CREATE SERVICE ---
+Future<void> _createService(String name) async {
+  final libDir = Directory('lib');
+  if (!libDir.existsSync()) {
+    print('❌ Run inside a Flutter project root.');
+    exit(1);
+  }
+
+  final className = _capitalize(name);
+  final serviceFile = File(
+    p.join(libDir.path, 'core', 'services', '${name}_service.dart'),
+  );
+
+  _write(serviceFile.parent.path, '${name}_service.dart', '''
+class ${className}Service {
+  void init() {
+    print('${className}Service initialized');
+  }
+}
+''');
+
+  print('✅ Service "$name" created!');
+}
+
+String _capitalize(String s) =>
+    s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+void _write(String lib, String path, String content) {
+  final file = File(p.join(lib, path));
+  file.createSync(recursive: true);
+  file.writeAsStringSync('${content.trim()}\n');
+}
