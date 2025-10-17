@@ -13,9 +13,6 @@ void main(List<String> args) async {
     case 'create':
       await _handleCreate(args.skip(1).toList());
       break;
-    case 'fix': // New: Handle the fix command
-      await _handleFix();
-      break;
     default:
       print('Unknown command: $command');
   }
@@ -41,122 +38,8 @@ Future<void> _handleCreate(List<String> args) async {
   }
 }
 
-// New: Handle the fix command to scan views and update routing
-Future<void> _handleFix() async {
-  final libDir = Directory('lib');
-  if (!libDir.existsSync()) {
-    print('❌ Run inside a Flutter project root.');
-    exit(1);
-  }
-
-  final viewsDir = Directory(p.join(libDir.path, 'views'));
-  if (!viewsDir.existsSync()) {
-    print('❌ No views directory found.');
-    return;
-  }
-
-  // Scan for view folders (e.g., login_view)
-  final viewEntities = await viewsDir.list().toList();
-  final viewNames = <String>[];
-  for (final entity in viewEntities) {
-    if (entity is Directory && p.basename(entity.path).endsWith('_view')) {
-      final folderName = p.basename(entity.path);
-      final name = folderName.replaceAll('_view', '');
-      viewNames.add(name);
-    }
-  }
-
-  if (viewNames.isEmpty) {
-    print('ℹ️ No views found to fix.');
-    return;
-  }
-
-  bool changesMade = false;
-
-  // Fix route_name.dart: Add missing route constants
-  final routeNameFile = File(p.join(libDir.path, 'routes', 'route_name.dart'));
-  if (routeNameFile.existsSync()) {
-    String content = await routeNameFile.readAsString();
-    for (final name in viewNames) {
-      final newRoute = "  static const String $name = '/$name';\n";
-      if (!content.contains(newRoute)) {
-        content = content.replaceFirst(
-          '// Add more routes here',
-          '$newRoute    // Add more routes here',
-        );
-        changesMade = true;
-      }
-    }
-    if (changesMade) {
-      await routeNameFile.writeAsString(content);
-    }
-  } else {
-    print('⚠️ route_name.dart not found. Skipping.');
-  }
-
-  // Reset changes flag for next file
-  changesMade = false;
-
-  // Fix routing.dart: Add missing imports and cases
-  final routingFile = File(p.join(libDir.path, 'routes', 'routing.dart'));
-  if (routingFile.existsSync()) {
-    String content = await routingFile.readAsString();
-    final missingImports = <String>[];
-    final missingCases = <String>[];
-    for (final name in viewNames) {
-      final viewFolderName = '${name}_view';
-      final importLine =
-          "import '../views/$viewFolderName/${name}_screen.dart';\n";
-      if (!content.contains(importLine)) {
-        missingImports.add(importLine);
-      }
-
-      final className = _capitalize(name);
-      final caseLine =
-          "      case RouteName.$name:\n        return MaterialPageRoute(builder: (_) => const ${className}Screen());\n";
-      if (!content.contains('case RouteName.$name:')) {
-        missingCases.add(caseLine);
-      }
-    }
-
-    if (missingImports.isNotEmpty) {
-      final newImports = missingImports.join('');
-      content = content.replaceFirst(
-        "import 'route_name.dart';",
-        "import 'route_name.dart';\n$newImports",
-      );
-      changesMade = true;
-    }
-
-    if (missingCases.isNotEmpty) {
-      final newCases = missingCases.join('');
-      content = content.replaceFirst('default:', '$newCases      default:');
-      changesMade = true;
-    }
-
-    if (changesMade) {
-      await routingFile.writeAsString(content);
-    }
-  } else {
-    print('⚠️ routing.dart not found. Skipping.');
-  }
-
-  // Run pub get if any changes were made
-  if (changesMade) {
-    print('🛠 Applying fixes...');
-    final result = await Process.run('flutter', [
-      'pub',
-      'get',
-    ], runInShell: true);
-    if (result.exitCode != 0) {
-      print('⚠️ flutter pub get failed: ${result.stderr}');
-    }
-  }
-
-  print('✅ Project fixed! Added/updated ${viewNames.length} views in routing.');
-}
-
 /// --- PROJECT CREATION ---
+///
 Future<void> _createFlutterProject(String name) async {
   final org = 'com.xdev';
   print('🚀 Creating Flutter project "$name"...');
@@ -237,7 +120,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import 'routes/route_name.dart';
 import 'routes/routing.dart';
-import 'package:$name/views/splash_view/splash_provider.dart';
+import 'providers/splash_provider.dart';
 
 void main() {
   runApp(
@@ -277,7 +160,7 @@ class RouteName {
 
   _write(lib, 'routes/routing.dart', '''
 import 'package:flutter/material.dart';
-import 'package:$name/views/splash_view/splash_screen.dart';
+import 'package:$name/views/splash_view/splash_provider.dart';
 import 'route_name.dart';
 
 class Routing {
@@ -568,6 +451,7 @@ class AppImages {
 }
 ''');
 
+  /// --- CONSTANTS ---
   _write(lib, 'core/constants/app_colors.dart', '''
 import 'package:flutter/material.dart';
 
@@ -678,6 +562,131 @@ extension SizedBoxExt on num {
   print('   cd $name');
   print('   flutter run');
 }
+
+// ---- open project  ----
+
+// ... (rest of your code)
+
+// Future<void> _openProjectIDE(String projectPath) async {
+//   print('');
+
+//   // Helper to run commands with timeout and error handling
+//   Future<ProcessResult> runCommand(
+//     List<String> args, {
+//     String? workingDirectory,
+//   }) async {
+//     try {
+//       return await Process.run(
+//         args[0],
+//         args.skip(1).toList(),
+//         workingDirectory: workingDirectory,
+//         runInShell: true,
+//       ).timeout(const Duration(seconds: 5));
+//     } catch (e) {
+//       return ProcessResult(0, 1, '', 'Exception: $e'); // Simulate failure
+//     }
+//   }
+
+//   // 1️⃣ VS Code: Check if 'code' is available
+//   bool isVSCodeInstalled() {
+//     final result = Process.runSync('code', ['--version'], runInShell: true);
+//     if (result.exitCode == 0) return true;
+
+//     // Fallback: Check common install paths
+//     if (Platform.isWindows) {
+//       return File(
+//         r'C:\Users\$USERNAME\AppData\Local\Programs\Microsoft VS Code\Code.exe'
+//             .replaceFirst('\$USERNAME', Platform.environment['USERNAME'] ?? ''),
+//       ).existsSync();
+//     } else if (Platform.isMacOS) {
+//       return Directory('/Applications/Visual Studio Code.app').existsSync();
+//     } else if (Platform.isLinux) {
+//       return File('/usr/bin/code').existsSync() ||
+//           File('~/.local/share/applications/code.desktop').existsSync();
+//     }
+//     return false;
+//   }
+
+//   if (isVSCodeInstalled()) {
+//     print('🖥 Opening project in VS Code...');
+//     final result = await runCommand([
+//       'code',
+//       '.',
+//     ], workingDirectory: projectPath);
+//     if (result.exitCode == 0) {
+//       print('✅ Opened in VS Code.');
+//       return;
+//     } else {
+//       print('⚠️ Failed to open VS Code: ${result.stderr}');
+//     }
+//   }
+
+//   // 2️⃣ Android Studio: Platform-specific checks and launch
+//   bool isAndroidStudioInstalled() {
+//     if (Platform.isMacOS) {
+//       final result = Process.runSync('ls', [
+//         '/Applications/Android Studio.app',
+//       ], runInShell: true);
+//       return result.exitCode == 0;
+//     } else if (Platform.isWindows) {
+//       // Check common install path or registry would be ideal, but simplify with env check
+//       final programFiles = Platform.environment['ProgramFiles'];
+//       return programFiles != null &&
+//           Directory(
+//             p.join(programFiles, 'Android', 'Android Studio'),
+//           ).existsSync();
+//     } else if (Platform.isLinux) {
+//       final result = Process.runSync('which', [
+//         'studio',
+//       ], runInShell: true); // Assumes 'studio' script in PATH
+//       return result.exitCode == 0;
+//     }
+//     return false;
+//   }
+
+//   Future<void> launchAndroidStudio() async {
+//     if (Platform.isMacOS) {
+//       await runCommand(['open', '-a', 'Android Studio', projectPath]);
+//     } else if (Platform.isWindows) {
+//       // Launch via presumed exe path
+//       final studioPath = p.join(
+//         Platform.environment['ProgramFiles'] ?? '',
+//         'Android',
+//         'Android Studio',
+//         'bin',
+//         'studio64.exe',
+//       );
+//       if (File(studioPath).existsSync()) {
+//         await runCommand([studioPath, projectPath]);
+//       }
+//     } else if (Platform.isLinux) {
+//       await runCommand(['studio', projectPath]); // 'studio' script
+//     }
+//   }
+
+//   if (isAndroidStudioInstalled()) {
+//     print('🖥 Opening project in Android Studio...');
+//     await launchAndroidStudio();
+//     print('✅ Opened in Android Studio.');
+//     return;
+//   }
+
+//   // 3️⃣ Fallback: Open in file explorer (always available)
+//   print(
+//     '⚠️ No IDE found (VS Code/Android Studio). Opening folder in file explorer...',
+//   );
+//   if (Platform.isMacOS) {
+//     await runCommand(['open', projectPath]);
+//   } else if (Platform.isWindows) {
+//     await runCommand(['explorer', projectPath]);
+//   } else if (Platform.isLinux) {
+//     await runCommand(['xdg-open', projectPath]);
+//   } else {
+//     print('ℹ️ Unsupported OS. Manually open: $projectPath');
+//     return;
+//   }
+//   print('✅ Folder opened. Import as Flutter project in your preferred IDE.');
+// }
 
 /// --- CREATE VIEW ---
 Future<void> _createView(String name) async {
