@@ -25,3 +25,7 @@
 ## 1.0.6
 
 - Initial version.
+
+## 1.0.7
+
+- Initial version.
